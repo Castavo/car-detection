@@ -1,36 +1,53 @@
-import pandas as pd
-import numpy as np
-from cv2 import SIFT_create
-from sklearn.cluster import KMeans
+from cv2 import SIFT_create, imread
+from sklearn.decomposition import PCA
 from tqdm import tqdm
-import os
-import pickle
-from utils import read_frame, annotations_for_frame
+from multiprocessing import Pool
+from datetime import datetime
+from utils import extract_frames_info
+import os, pickle, argparse
+import numpy as np
 
-N_FEATURES = 500_000
 FEATURES_PICKLE_NAME = "data/features.pkl"
 
-def collect_labeled_features(df_annotation, sift):
+def collect_labeled_vectors(frames_info, stride=10, n_processes=1):
     """ 
-    Returns SIFT features for all images labeled as "part of a car" or not
-    The labeling is done thanks to the keypoints and bounding boxes
+        Returns SIFT feature vectors for all images, labeled as "part of a car" or not
+        The labeling is done thanks to the keypoints and bounding boxes
+        We used a stride because these are images coming from a video, and consequent images will contain similar SIFT vectors
     """
-    features, labels = [], []
-
-    for frame in tqdm(range(1, len(df_annotation))):
-        image = read_frame(df_annotation, frame)
-        bbs = annotations_for_frame(df_annotation, frame)
+    sift = SIFT_create()
+    
+    def labeled_vectors_for_frame(frame_path, bbs):
+        image = imread(os.path.join("data", frame_path))
         kp, f = sift.detectAndCompute(image, None)
+        return f, label_keypoints(kp, bbs)
 
-        features += f.tolist()
-        labels += label_keypoints(kp, bbs).tolist()
+    vectors, labels = [], []
+    if n_processes != 1:
+        pool = Pool(n_processes)
+        vects_labels = pool.starmap(
+            labeled_vectors_for_frame,
+            frames_info[::stride],
+        )
 
-    return features, labels
+        pool.close()
+
+        # gather vectors and labels in one list, we 
+        for feature_vects, associated_labels in tqdm(vects_labels):
+            vectors += feature_vects.tolist()
+            labels += associated_labels.tolist()
+    else:
+        for frame_path, bb_string in tqdm(frames_info[::stride]):
+            feature_vects, associated_labels = labeled_vectors_for_frame(frame_path, bb_string)
+            vectors += feature_vects.tolist()
+            labels += associated_labels.tolist()
+            
+    return vectors, labels
 
 def label_keypoints(keypoints, bounding_boxes):
+    """Returns an array saying for each kp if it is in the bb or not"""
     if len(bounding_boxes) == 0:
-        print("Well well well")
-        return np.zeros(len(keypoints), np.integer)
+        return np.zeros(len(keypoints), np.int64)
 
     coords = np.array([kp.pt for kp in keypoints])
 
@@ -43,47 +60,52 @@ def label_keypoints(keypoints, bounding_boxes):
 
     return is_kp_good.astype(int)
 
-def reduce_features(features, labels, n_features):
+def reduce_n_features(feature_vects, n_features):
+    """Reduce the dimensionnality of the features vectors"""
     print("Reducing features")
-    kmeans = KMeans(n_features, verbose=2)
-    afiliations = kmeans.fit_predict(features)
-
-    print("Computing new labels")
-    centroid_labels = []
-    count_bofbof = 0
-    for i in range(n_features):
-        new_label = labels[afiliations == i].mean()
-        if .4 < new_label <.6:
-            count_bofbof += 1
-        centroid_labels.append(int(new_label >= .6))
-    print(f"Il y a quand même eu {count_bofbof} sur {n_features}")
-    return kmeans.cluster_centers_, centroid_labels
+    pca = PCA(n_features)
+    reduced_vectors = pca.fit_transform(feature_vects)
+    return reduced_vectors, pca
 
 
 if __name__ == "__main__":
-    df_ground_truth = pd.read_csv('data/train.csv')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stride", type=int, default=10)
+    parser.add_argument("--n_features", type=int, default=20)
+    parser.add_argument("--n_processes", type=int, default=1)
+    parser.add_argument("--features_filename", default=FEATURES_PICKLE_NAME)
+    parser.add_argument("--pca_filename", help="The name of the pickle file to write the pca to", default="models/pca.pkl")
+    parser.add_argument("--force", action="store_true", help="force recomputing if result file already exists")
 
-    if not os.path.exists(FEATURES_PICKLE_NAME):
-        print(
-            "SIFT features were not already computed.\n" 
-            f"Computing them and writing them into {FEATURES_PICKLE_NAME}"
-        )
-        sift = SIFT_create()
-        features, labels = collect_labeled_features(df_ground_truth, sift)
-        if len(features) > N_FEATURES:
-            print(
-                f"We gathered {len(features)} feature, which is to many to store."
-                "Compressing them using KMeans"
-            )
-            features, labels = reduce_features(features, labels, N_FEATURES)
+    args = parser.parse_args()
 
-        with open(FEATURES_PICKLE_NAME, "wb") as pickle_file:
-            pickle.dump((features, labels), pickle_file)
-    else:
-        print(
-            "SIFT features were already computed.\n" 
-            f"Loading them from {FEATURES_PICKLE_NAME}"
-        )
-        with open(FEATURES_PICKLE_NAME, "rb") as pickle_file:
-            features, labels = pickle.load(pickle_file)
-    print("Done")
+    if os.path.exists(args.features_filename) and not args.force:
+        print("Feature vectors file already exists, quitting.")
+        exit()
+
+    print(
+        f"Computing SIFT features them and writing them into {args.features_filename}"
+    )
+    
+    frames_info = extract_frames_info('data/train.csv')
+    start_sift = datetime.now()
+    feature_vects, labels = collect_labeled_vectors(frames_info, args.stride, args.n_processes)
+    print(f"We gathered {len(labels)} feature vectors using a stride of {args.stride}")
+    print(f"That took {datetime.now() - start_sift}")
+
+    start_pca = datetime.now()
+    feature_vects, pca = reduce_n_features(feature_vects, args.n_features)
+    print(
+        f"Reduced vectors account for {pca.explained_variance_ratio_.sum()}"
+        f"of the ratio, with dimension {args.n_features}"
+    )
+    print(f"That took {datetime.now() - start_pca}")
+
+    os.makedirs(os.path.dirname(args.pca_filename), exist_ok=True)
+    with open(args.pca_filename, "wb") as pickle_file:
+        pickle.dump(pca, pickle_file)
+
+    with open(args.features_filename, "wb") as pickle_file:
+        pickle.dump((feature_vects, labels), pickle_file)
+
+    print("All files writen down")

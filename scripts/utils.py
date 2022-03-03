@@ -3,24 +3,30 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
 from cv2 import imread
+import csv
 
 
 H, W = 720, 1280
 
+def extract_frames_info(file_path):
+    res = []
+    with open(file_path) as csvfile:
+        frames_info = csv.reader(csvfile, delimiter=',')
+        next(frames_info) # skip the header line
+        for frame_info in frames_info:
+            res.append((frame_info[0], annotations_from_csv(frame_info[1])))
+    return res
 
 def read_frame(df_annotation, frame):
     """Read frames and create integer frame_id-s"""
     file_path = df_annotation[df_annotation.index == frame]['frame_id'].values[0]
     return imread(file_path)
 
-def annotations_for_frame(df_annotation, frame):
-    assert frame in df_annotation.index
-    bbs = df_annotation[df_annotation.index == frame].bounding_boxes.values[0]
-
-    if pd.isna(bbs): # some frames contain no vehicles
+def annotations_from_csv(bb_string):
+    if len(bb_string) == 0:
         return []
 
-    bbs = list(map(lambda x : int(x), bbs.split(' ')))
+    bbs = list(map(lambda x : int(x), bb_string.split(' ')))
     return np.array_split(bbs, len(bbs) / 4)
 
 def show_annotation(df_annotation, frame):
