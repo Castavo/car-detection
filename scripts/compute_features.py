@@ -76,6 +76,8 @@ if __name__ == "__main__":
     parser.add_argument("--features_filename", default=FEATURES_PICKLE_NAME)
     parser.add_argument("--pca_filename", help="The name of the pickle file to write the pca to", default="models/pca.pkl")
     parser.add_argument("--force", action="store_true", help="force recomputing if result file already exists")
+    parser.add_argument("--manual_help", help="Filter the training data to have more significant results")
+
 
     args = parser.parse_args()
 
@@ -87,7 +89,7 @@ if __name__ == "__main__":
         f"Computing SIFT features them and writing them into {args.features_filename}"
     )
     
-    frames_info = extract_frames_info('data/train.csv')
+    frames_info = extract_frames_info('data/train.csv', args.manual_help == "no_night", args.manual_help == "only_similar")
     start_sift = datetime.now()
     feature_vects, labels = collect_labeled_vectors(frames_info, args.stride, args.n_processes)
     print(f"We gathered {len(labels)} feature vectors using a stride of {args.stride}")

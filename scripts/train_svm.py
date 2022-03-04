@@ -13,6 +13,7 @@ parser.add_argument("--train_size", default=30_000, type=int)
 parser.add_argument("--test_size", default=10_000, type=int)
 parser.add_argument("--features_file_path", help="The name of the pickle file where the features vects and labels were writen")
 parser.add_argument("--model_name", help="The name of the pickle file to write the svm to")
+parser.add_argument("--skip_metrics", action="store_true", help="Skip computing the metrics")
 
 args = parser.parse_args()
 
@@ -41,22 +42,23 @@ svm.fit(train_features, train_labels)
 
 print(f"Model trained (took {datetime.now() - start_train})")
 
-beta_param = .5
+if not args.skip_metrics:
+    beta_param = .5
 
-start_evaluate = datetime.now()
-pred_labels = svm.predict(train_features)
-print(f"F-{beta_param} score on the train data: {fbeta_score(train_labels, pred_labels, beta=beta_param)}")
+    start_evaluate = datetime.now()
+    pred_labels = svm.predict(train_features)
+    print(f"F-{beta_param} score on the train data: {fbeta_score(train_labels, pred_labels, beta=beta_param)}")
 
-pred_labels = svm.predict(test_features)
-print(f"F-{beta_param} score on the test data: {fbeta_score(test_labels, pred_labels, beta=beta_param)}")
+    pred_labels = svm.predict(test_features)
+    print(f"F-{beta_param} score on the test data: {fbeta_score(test_labels, pred_labels, beta=beta_param)}")
 
-print("VN | FP \n FN | VP")
-print(confusion_matrix(test_labels, pred_labels))
+    print("VN | FP \n FN | VP")
+    print(confusion_matrix(test_labels, pred_labels))
 
-print(f"Evaluation took {datetime.now() - start_evaluate}")
+    print(f"Evaluation took {datetime.now() - start_evaluate}")
 
 
 dest_name = args.model_name or "svm_{args.train_size}" + args.reduced * "_reduced" + ".pkl"
 
-with open(os.path.join("models", dest_name), "wb") as pickle_file:
+with open(dest_name, "wb") as pickle_file:
     pickle.dump(svm, pickle_file)

@@ -8,12 +8,16 @@ import csv
 
 H, W = 720, 1280
 
-def extract_frames_info(file_path):
+def extract_frames_info(file_path, no_night=False, only_similar=False):
     res = []
     with open(file_path) as csvfile:
         frames_info = csv.reader(csvfile, delimiter=',')
         next(frames_info) # skip the header line
         for frame_info in frames_info:
+            if no_night and frame_info[0][6:23] in ["b1c81faa-3df17267", "b1c81faa-c80764c5"]:
+                continue
+            if only_similar and not frame_info[0][6:23] in ["b1cebfb7-284f5117", "b1c9c847-3bda4659"]:
+                continue
             res.append((frame_info[0], annotations_from_csv(frame_info[1])))
     return res
 
