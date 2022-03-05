@@ -5,7 +5,7 @@ import matplotlib.patches as patches
 from cv2 import imread
 import csv
 
-
+ 
 H, W = 720, 1280
 
 def extract_frames_info(file_path, no_night=False, only_similar=False):
@@ -18,7 +18,7 @@ def extract_frames_info(file_path, no_night=False, only_similar=False):
                 continue
             if only_similar and not frame_info[0][6:23] in ["b1cebfb7-284f5117", "b1c9c847-3bda4659"]:
                 continue
-            res.append((frame_info[0], annotations_from_csv(frame_info[1])))
+            res.append((frame_info[0], annotations_from_string(frame_info[1])))
     return res
 
 def read_frame(df_annotation, frame):
@@ -26,12 +26,31 @@ def read_frame(df_annotation, frame):
     file_path = df_annotation[df_annotation.index == frame]['frame_id'].values[0]
     return imread(file_path)
 
-def annotations_from_csv(bb_string):
+def annotations_from_string(bb_string):
     if len(bb_string) == 0:
         return []
 
     bbs = list(map(lambda x : int(x), bb_string.split(' ')))
     return np.array_split(bbs, len(bbs) / 4)
+
+def label_keypoints(keypoints, bounding_boxes):
+    """Returns an array saying for each kp if it is in the bb or not"""
+    if len(bounding_boxes) == 0:
+        return np.zeros(len(keypoints), np.int64)
+
+    if type(keypoints) != np.ndarray:
+        coords = np.array([kp.pt for kp in keypoints])
+    else:
+        coords = keypoints
+
+    low_bbs = np.array([bb[0:2] for bb in bounding_boxes]) # shape = (M, 2)
+    high_bbs = low_bbs + np.array([bb[2:] for bb in bounding_boxes])
+
+    is_coord_good = (low_bbs[np.newaxis, ...] <= coords[:, np.newaxis, :]) & (coords[:, np.newaxis, :] <= high_bbs[np.newaxis, ...]) # (N, M, 2)
+
+    is_kp_good = (is_coord_good[:, :, 0] & is_coord_good[:, :, 1]).any(1)
+
+    return is_kp_good.astype(int)
 
 def show_annotation(df_annotation, frame):
     img = read_frame(df_annotation, frame)

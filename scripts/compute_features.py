@@ -3,7 +3,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 from multiprocessing import Pool
 from datetime import datetime
-from utils import extract_frames_info
+from utils import extract_frames_info, label_keypoints
 import os, pickle, argparse
 import numpy as np
 
@@ -44,21 +44,7 @@ def collect_labeled_vectors(frames_info, stride=10, n_processes=1):
             
     return vectors, labels
 
-def label_keypoints(keypoints, bounding_boxes):
-    """Returns an array saying for each kp if it is in the bb or not"""
-    if len(bounding_boxes) == 0:
-        return np.zeros(len(keypoints), np.int64)
 
-    coords = np.array([kp.pt for kp in keypoints])
-
-    low_bbs = np.array([bb[0:2] for bb in bounding_boxes]) # shape = (M, 2)
-    high_bbs = low_bbs + np.array([bb[2:] for bb in bounding_boxes])
-
-    is_coord_good = (low_bbs[np.newaxis, ...] <= coords[:, np.newaxis, :]) & (coords[:, np.newaxis, :] <= high_bbs[np.newaxis, ...]) # (N, M, 2)
-
-    is_kp_good = (is_coord_good[:, :, 0] & is_coord_good[:, :, 1]).any(1)
-
-    return is_kp_good.astype(int)
 
 def reduce_n_features(feature_vects, n_features):
     """Reduce the dimensionnality of the features vectors"""
@@ -86,7 +72,7 @@ if __name__ == "__main__":
         exit()
 
     print(
-        f"Computing SIFT features them and writing them into {args.features_filename}"
+        f"Computing SIFT features and writing them into {args.features_filename}"
     )
     
     frames_info = extract_frames_info('data/train.csv', args.manual_help == "no_night", args.manual_help == "only_similar")
