@@ -1,14 +1,10 @@
 import numpy as np
-import pandas as pd
-from matplotlib import pyplot as plt
-import matplotlib.patches as patches
-from cv2 import imread
-import csv
+import csv, os
 
  
 H, W = 720, 1280
 
-def extract_frames_info(file_path, no_night=False, only_similar=False):
+def extract_frames_info(file_path, data_path="data", no_night=False, only_similar=False):
     res = []
     with open(file_path) as csvfile:
         frames_info = csv.reader(csvfile, delimiter=',')
@@ -18,19 +14,16 @@ def extract_frames_info(file_path, no_night=False, only_similar=False):
                 continue
             if only_similar and not frame_info[0][6:23] in ["b1cebfb7-284f5117", "b1c9c847-3bda4659"]:
                 continue
-            res.append((frame_info[0], annotations_from_string(frame_info[1])))
+            res.append(
+                (os.path.join(data_path, frame_info[0]), annotations_from_string(frame_info[1]))
+            )
     return res
-
-def read_frame(df_annotation, frame):
-    """Read frames and create integer frame_id-s"""
-    file_path = df_annotation[df_annotation.index == frame]['frame_id'].values[0]
-    return imread(file_path)
 
 def annotations_from_string(bb_string):
     if len(bb_string) == 0:
         return []
 
-    bbs = list(map(lambda x : int(x), bb_string.split(' ')))
+    bbs = list(map(int, bb_string.split(' ')))
     return np.array_split(bbs, len(bbs) / 4)
 
 def label_keypoints(keypoints, bounding_boxes):
@@ -52,20 +45,6 @@ def label_keypoints(keypoints, bounding_boxes):
 
     return is_kp_good.astype(int)
 
-def show_annotation(df_annotation, frame):
-    img = read_frame(df_annotation, frame)
-    bbs = annotations_for_frame(df_annotation, frame)
-
-    fig, ax = plt.subplots(figsize=(15, 12))
-
-    for x, y, dx, dy in bbs:
-
-        rect = patches.Rectangle((x, y), dx, dy, edgecolor='r', facecolor='none')
-        ax.add_patch(rect)
-
-    ax.imshow(img)
-    ax.set_title('Annotations for frame {}.'.format(frame))
-
 def bounding_boxes_to_mask(bounding_boxes, H, W):
     
     """
@@ -79,7 +58,6 @@ def bounding_boxes_to_mask(bounding_boxes, H, W):
     return mask
 
 def run_length_encoding(mask):
-
     """
     Produces run length encoding for a given binary mask
     """
@@ -95,3 +73,9 @@ def run_length_encoding(mask):
     lengths = ends - starts + 1
 
     return ' '.join(['%d %d' % (s, l) for s, l in zip(starts, lengths)])
+
+
+if __name__ == "__main__":
+    res = [ar.tolist() for ar in annotations_from_string("0 0 100 100 20 50 125 165")]
+    assert res == [[0, 0, 100, 100], [20, 50, 125, 165]]
+    print("All good")
