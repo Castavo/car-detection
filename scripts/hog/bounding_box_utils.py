@@ -26,21 +26,26 @@ def find_free_window(image_shape, bounding_boxes, window_shape, at_random=True):
     """Returns a position where we could have a free window in our image"""
     if at_random:
         window_pos = random_position_in_image(image_shape, window_shape)
+        i = 0
         while check_intersection(bounding_boxes, (*window_pos, *window_shape)):
             window_pos = random_position_in_image(image_shape, window_shape)
+            i += 1
+            if i > 1000:
+                # Window is just so big
+                return None
         return (*window_pos, *window_shape)
         
 def place_all_windows(image_shape, bounding_boxes, window_shapes, ignore_other_windows=False):
     new_bboxes = []
     for window_shape in window_shapes:
-        new_bboxes.append(
-            find_free_window(
-                image_shape, 
-                bounding_boxes + new_bboxes * (not ignore_other_windows), 
-                window_shape
-            )
+        new_bbox = find_free_window(
+            image_shape, 
+            bounding_boxes + new_bboxes * (not ignore_other_windows), 
+            window_shape
         )
-    return bounding_boxes + new_bboxes
+        if new_bbox:
+            new_bboxes.append(new_bbox)
+    return new_bboxes
 
 if __name__ == "__main__":
     assert intersection_area([0, 0, 100, 200], [50, 100, 100, 200]) == 5000

@@ -1,18 +1,20 @@
 import numpy as np
 import csv, os
 
- 
+NIGHT_PREFIXES = ["b1c81faa-3df17267", "b1c81faa-c80764c5"]
+SIMILAR_PREFIXES = ["b1cebfb7-284f5117", "b1c9c847-3bda4659"]
+
 H, W = 720, 1280
 
-def extract_frames_info(file_path, data_path="data", no_night=False, only_similar=False):
+def extract_frames_info(file_path, data_path="data", only_prefixes=None, skip_prefixes=None):
     res = []
     with open(file_path) as csvfile:
         frames_info = csv.reader(csvfile, delimiter=',')
         next(frames_info) # skip the header line
         for frame_info in frames_info:
-            if no_night and frame_info[0][6:23] in ["b1c81faa-3df17267", "b1c81faa-c80764c5"]:
+            if skip_prefixes and frame_info[0][6:23] in skip_prefixes:
                 continue
-            if only_similar and not frame_info[0][6:23] in ["b1cebfb7-284f5117", "b1c9c847-3bda4659"]:
+            if only_prefixes and not frame_info[0][6:23] in only_prefixes:
                 continue
             res.append(
                 (os.path.join(data_path, frame_info[0]), annotations_from_string(frame_info[1]))
@@ -74,6 +76,11 @@ def run_length_encoding(mask):
 
     return ' '.join(['%d %d' % (s, l) for s, l in zip(starts, lengths)])
 
+def remove_small_bb(frames_info, min_size=64):
+    return [
+        (path, [bb for bb  in bbs if min(bb[2], bb[2]) > min_size]) 
+        for path, bbs in frames_info
+    ]
 
 if __name__ == "__main__":
     res = [ar.tolist() for ar in annotations_from_string("0 0 100 100 20 50 125 165")]
