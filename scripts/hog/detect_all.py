@@ -26,9 +26,9 @@ detector = Detector(classifier)
 
 def detect_one_image(image_path):
     image = imread(image_path)
-    rough_detections = detector.detect(image, 10, [64, 128, 256, 400], [.8, 0.5, 1.0], verbose=False)
+    rough_detections, decisions = detector.detect(image, 10, [64, 128, 256, 400], [.8, 0.5, 1.0], verbose=False)
     detections = detector.nms(rough_detections)
-    return os.path.basename(image_path), detections
+    return os.path.basename(image_path), detections, rough_detections, decisions
 
 all_files = [os.path.join(args.test_dir, filename) for filename in os.listdir(args.test_dir)]
 
@@ -46,7 +46,7 @@ with open(args.result_path, "wb") as pickle_file:
 
 
 rows = [["Id", "Predicted"]]
-for file_name, bboxes in detections:
+for file_name, bboxes, _, _ in detections:
     rle = run_length_encoding(bounding_boxes_to_mask(bboxes, 720, 1280))
     rows.append(['test/' + file_name, rle])
 

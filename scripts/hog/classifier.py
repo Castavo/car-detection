@@ -98,12 +98,12 @@ class HOGClassifier:
             print(confusion_matrix(labels, pred_labels))
             print(f"F1-score over the train data: {f1_score(labels, pred_labels)}")
 
-    def predict(self, image, return_feature=False):
+    def predict(self, image, return_decision=False):
         resized = resize(image, self.goal_shape)
         feature_vect = hog(resized, **self.hog_params, channel_axis=-1)
         label = self.svm.predict([feature_vect])
-        if return_feature:
-            return label, feature_vect
+        if return_decision:
+            return self.svm.decision_function([feature_vect])
         else:
             return label
 

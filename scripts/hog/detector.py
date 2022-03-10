@@ -10,6 +10,7 @@ class Detector:
 
     def detect(self, image, stride, window_widths, window_ratios, verbose=True):
         detections = []
+        decisions = []
 
         H, W = image.shape[:2]
         if verbose: progress = tqdm(total=len(window_widths)*len(window_ratios))
@@ -20,10 +21,12 @@ class Detector:
                 for i in range(0, H - window_size[1], stride):
                     for j in range(0, W - window_size[0], stride):
                         sub_image = image[i: i + window_size[1], j: j + window_size[1]]
-                        if self.classifier.predict(sub_image):
+                        decision = self.classifier.predict(sub_image, return_decision=True)[0]
+                        if decision > 0:
                             detections.append((j, i, *window_size))
+                            decisions.append(decision)
         if verbose: progress.close()
-        return detections
+        return detections, decisions
 
     def nms(self, detections, threshold=.75, thresholding_method="min"):
         if self.nms_mode == "surface":
