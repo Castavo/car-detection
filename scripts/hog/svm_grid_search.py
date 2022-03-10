@@ -12,16 +12,26 @@ N_PROCESSES = int(os.getenv("SLURM_CPUS_PER_TASK", 1))
 parser = argparse.ArgumentParser()
 parser.add_argument("--linear", action="store_true")
 parser.add_argument("--res_path", help="The name of the pickle file to write the svm and params to")
+parser.add_argument("--train_path", help="The path to the pickled trained features and labels")
+parser.add_argument("--val_path", help="The path to the pickled validation features and labels")
+parser.add_argument("--hard_examples_path", help="The path to the hard examples features")
 
 args = parser.parse_args()
 
 
 def fit_and_test(svm_params):
-    with open("data/hog/features/train_64_8.pkl", "rb") as pickle_file:
+    with open(args.train_path or "data/hog/features/train_64_8.pkl", "rb") as pickle_file:
         train_features, train_labels = pickle.load(pickle_file)
 
-    with open("data/hog/features/val_64_8.pkl", "rb") as pickle_file:
+    with open(args.val_path or "data/hog/features/val_64_8.pkl", "rb") as pickle_file:
         val_features, val_labels = pickle.load(pickle_file)
+    
+    if args.hard_examples_path:
+        with open(args.hard_examples_path, "rb") as pickle_file:
+            hard_features = pickle.load(pickle_file)
+            train_features += hard_features
+            train_labels += ([0] * len(hard_features))
+
     if svm_params["kernel"] == "linear":
         svm_params.pop("kernel")
         svm = LinearSVC(
@@ -34,25 +44,26 @@ def fit_and_test(svm_params):
     else:
         svm = SVC(
             verbose=0,
-            max_iter=2000,
+            max_iter=3000,
             **svm_params, 
         )
+            
     svm.fit(train_features, train_labels)
     pred_train_labels = svm.predict(train_features)
     pred_val_labels = svm.predict(val_features)
-    return svm_params, (f1_score(train_labels, pred_train_labels), confusion_matrix(train_labels, pred_train_labels),
-    f1_score(val_labels, pred_val_labels), confusion_matrix(val_labels, pred_val_labels))
+    return svm_params, (f1_score(train_labels, pred_train_labels), confusion_matrix(train_labels, pred_train_labels).tolist(),
+    f1_score(val_labels, pred_val_labels), confusion_matrix(val_labels, pred_val_labels).tolist())
 
 if args.linear:
     param_grid = {
-        "C": np.logspace(-2, 1, 7), 
-        "class_weight": [{0: 1, 1: w} for w in [1, .8, .5, .2]],
+        "C": np.logspace(-2, 1, 10), 
+        "class_weight": [{0: 1, 1: w} for w in [1.2, 1, .8, .5, .2]],
         "kernel": ["linear"]
     }
 else:
     param_grid = {
-        "C": np.logspace(-2, 1, 7), 
-        "gamma": np.logspace(-2, 1, 7),
+        "C": np.logspace(-1, 0, 7), 
+        "gamma": np.logspace(-1, 0, 7),
         "kernel": ["rbf"]
     }
 grid = ParameterGrid(param_grid)

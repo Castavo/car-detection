@@ -8,11 +8,16 @@ def intersection_area(bbox1, bbox2):
         for i in [0, 1]
     ])
 
-def check_intersection(bounding_boxes, bb_candidate, threshold=.25):
+def check_intersection(bounding_boxes, bb_candidate, threshold=.25, method="IOU"):
     """check wether the candidate intersects with another bouding box 
     for at least <threshold> of IOU"""
     for bbox in bounding_boxes:
-        if 2 * intersection_area(bbox, bb_candidate) / (bbox[2] * bbox[3] + bb_candidate[2] * bb_candidate[3]) > threshold:
+        if method == "IOU":
+            ref = (bbox[2] * bbox[3] + bb_candidate[2] * bb_candidate[3]) / 2
+        else:
+            ref = min(bbox[2] * bbox[3], bb_candidate[2] * bb_candidate[3])
+
+        if intersection_area(bbox, bb_candidate) / ref > threshold:
             return True
     return False
 

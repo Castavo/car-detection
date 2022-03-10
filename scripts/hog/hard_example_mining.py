@@ -1,6 +1,5 @@
-from ast import arg
 from skimage.io import imread
-from bounding_box_utils import find_free_window
+from .bounding_box_utils import find_free_window
 from scripts.utils import extract_frames_info
 from random import choice
 from tqdm import tqdm
@@ -16,7 +15,11 @@ WINDOW_SHAPES = [(width, int(width*ratio)) for width in WINDOW_WIDTHS for ratio 
 parser = argparse.ArgumentParser()
 parser.add_argument("--classifier_path", help="The name of the pickle file where the classifier is.")
 parser.add_argument("--result_path", help="The name of the pickle file to write the new features to.")
-parser.add_argument("--n_examples_per_image", help="The name of the pickle file to write the svm and params to.")
+parser.add_argument(
+    "--n_examples_per_image", 
+    help="The name of the pickle file to write the svm and params to.", 
+    type=int, default=20
+)
 
 args = parser.parse_args()
 
@@ -48,5 +51,9 @@ hard_examples = pool.imap_unordered(
 
 pool.close()
 
+result = []
+for example_list in tqdm(hard_examples, total=len(frames_info)):
+    result += example_list
+
 with open(args.result_path, "wb") as pickle_file:
-    pickle.dump(list(tqdm(hard_examples)), pickle_file)
+    pickle.dump(result, pickle_file)

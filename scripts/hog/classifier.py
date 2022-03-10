@@ -38,7 +38,6 @@ class HOGClassifier:
     def features_labels(self, frames_info, n_processes=10, augment=True, n_negatives=5):
         """Returns a list of feature vectors with a list of labels in the same order
         frames_info list of tuples: filename, bounding_boxes"""
-        # print(frames_info[0])
         all_bb_shapes = sum([[bb[2:] for bb in info[1]] for info in frames_info], []) * n_negatives
         shuffle(all_bb_shapes)
         negatives_window_shapes = np.array_split(all_bb_shapes, len(frames_info))
@@ -67,9 +66,12 @@ class HOGClassifier:
             labels += label_sublit
         return features, labels
 
-    def train(self, frames_info, n_processes=10, verbose=2, evaluate=True, augment=True):
+    def train(self, frames_info, n_processes=10, verbose=2, evaluate=True, augment=True, hard_examples=None):
         if verbose: print("Computing features")
         features, labels = self.features_labels(frames_info, n_processes, augment)
+        if hard_examples:
+            features += hard_examples
+            labels += [0]*len(hard_examples)
 
         if verbose: print(f"Done. We have a total of {len(features)} features of length {len(features[0])}\nTraining SVM")
 

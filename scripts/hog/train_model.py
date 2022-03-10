@@ -1,7 +1,5 @@
-from sklearn.metrics import confusion_matrix, fbeta_score
 import argparse, os, pickle
-# from datetime import datetime
-from scripts.utils import extract_frames_info, SIMILAR_PREFIXES, remove_small_bb
+from scripts.utils import extract_frames_info, SIMILAR_PREFIXES, NIGHT_PREFIXES, remove_small_bb
 from .classifier import HOGClassifier
 
 MODELS_PATH = "models/hog"
@@ -19,7 +17,9 @@ parser.add_argument("--pixels_per_cell", type=lambda x: tuple(int(n) for n in x.
 parser.add_argument("--cells_per_block", type=lambda x: tuple(int(n) for n in x.split(",")), default=(3, 3))
 parser.add_argument("--orientations", type=int, default=8)
 parser.add_argument("--no_augmentation", action="store_true", help="Do not augment training data by flipping it")
+parser.add_argument("--hard_examples_path", help="The path to the hard examples features")
 parser.add_argument("--skip_validate", action="store_true", help="Take a part of the data as a validation set or not")
+parser.add_argument("--no_night", action="store_true", help="Do not train on night time videos")
 parser.add_argument("--skip_small", action="store_true", help="Ignore small pictures")
 parser.add_argument("--model_name", help="The name of the pickle file to write the svm and params to")
 parser.add_argument("--skip_metrics", action="store_true", help="Skip computing the metrics")
@@ -27,7 +27,9 @@ parser.add_argument("--skip_metrics", action="store_true", help="Skip computing 
 args = parser.parse_args()
 
 print (vars(args))
-frames_info = extract_frames_info("data/train.csv", skip_prefixes=[SIMILAR_PREFIXES[0]] * (not args.skip_validate))
+frames_info = extract_frames_info(
+    "data/train.csv", 
+    skip_prefixes=[SIMILAR_PREFIXES[0]] * (not args.skip_validate) + (not args.no_night) * NIGHT_PREFIXES)
 
 if args.skip_small:
     frames_info = remove_small_bb(frames_info)
@@ -46,9 +48,21 @@ svm_params = {
     "class_weight": {0: 1, 1: args.positive_weight}
 }
 
-classifier = HOGClassifier(hog_params, svm_params, args.goal_shape)
+if args.hard_examples_path:
+    with open(args.hard_examples_path, "rb") as pickle_file:
+        hard_features = pickle.load(pickle_file)
+else:
+    hard_features = None
 
-classifier.train(frames_info, N_PROCESSES, evaluate=not args.skip_metrics, augment=not args.no_augmentation)
+classifier = HOGClassifier(hog_params, svm_params, args.goal_shape)
+classifier.train(
+    frames_info,
+    N_PROCESSES,
+    evaluate=not args.skip_metrics, 
+    augment=not args.no_augmentation,
+    hard_examples=hard_features
+)
+
 
 os.makedirs(MODELS_PATH, exist_ok=True)
 model_name = args.model_name or f"hog_c{args.pixels_per_cell[0]}_s{args.goal_shape[0]}-{args.goal_shape[1]}.pkl"
