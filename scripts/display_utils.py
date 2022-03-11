@@ -12,8 +12,13 @@ def show_bbs(ax, bbs, last_green=False, confidences=None):
                 facecolor='none'
             )
         )
-        if confidences:
-            ax.text(x, y, str(confidences[i]), backgroundcolor="r", color="w", horizontalalignment="left", verticalalignment="bottom", fontsize=8, fontweight="bold")
+        if confidences is not None:
+            ax.text(
+                x, y, str(confidences[i]), 
+                backgroundcolor="r", color="w", 
+                horizontalalignment="left", verticalalignment="bottom", 
+                fontsize=8, fontweight="bold"
+            )
 
 def show_image_with_bbs(image_path, bbs, last_green=False, confidences=None):
     image = imread(image_path)

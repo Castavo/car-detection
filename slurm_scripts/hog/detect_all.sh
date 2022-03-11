@@ -3,7 +3,7 @@
 #SBATCH --output=outputs/hog/detect/%x.o%j 
 #SBATCH --time=2:00:00 
 #SBATCH --partition=mem
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=8G
 #SBATCH --cpus-per-task=70
 
 # Module load 
