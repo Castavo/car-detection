@@ -20,11 +20,12 @@ parser.add_argument(
     help="The name of the pickle file to write the svm and params to.", 
     type=int, default=20
 )
+parser.add_argument("--n_processes", type=int, help="Number of processes to use.", default=N_PROCESSES)
 
 args = parser.parse_args()
 
 with open(args.classifier_path, "rb") as pickle_file:
-    classifier = pickle.load(pickle_file)
+    CLASSIFIER = pickle.load(pickle_file)
 
 def mine_hard_example(frame_info):
     image_path, bboxes = frame_info
@@ -35,7 +36,7 @@ def mine_hard_example(frame_info):
         if window is None:
             continue
         sub_image = image[window[1]: window[1]+window[3], window[0]: window[0]+window[2]]
-        label, feature_vect = classifier.predict(sub_image, True)
+        label, feature_vect = CLASSIFIER.predict(sub_image, return_feature=True)
         if label:
             examples.append(feature_vect)
     return examples
@@ -43,7 +44,7 @@ def mine_hard_example(frame_info):
 
 frames_info = extract_frames_info("data/train.csv")
 
-pool = Pool(N_PROCESSES)
+pool = Pool(args.n_processes)
 hard_examples = pool.imap_unordered(
     mine_hard_example,
     frames_info
@@ -55,5 +56,6 @@ result = []
 for example_list in tqdm(hard_examples, total=len(frames_info)):
     result += example_list
 
+os.makedirs(os.path.dirname(args.result_path), exist_ok=True)
 with open(args.result_path, "wb") as pickle_file:
     pickle.dump(result, pickle_file)

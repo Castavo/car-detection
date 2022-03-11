@@ -36,7 +36,7 @@ def find_free_window(image_shape, bounding_boxes, window_shape, at_random=True):
             window_pos = random_position_in_image(image_shape, window_shape)
             i += 1
             if i > 1000:
-                # Window is just so big
+                # Window is just too big
                 return None
         return (*window_pos, *window_shape)
         

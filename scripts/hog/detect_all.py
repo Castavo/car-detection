@@ -1,6 +1,6 @@
 from skimage.io import imread
-from scripts.utils import extract_frames_info, run_length_encoding, bounding_boxes_to_mask
-from .detector import Detector
+from scripts.utils import run_length_encoding, bounding_boxes_to_mask
+from .detection import detection_pipeline
 from tqdm import tqdm
 from multiprocessing import Pool
 import argparse, pickle, os
@@ -10,40 +10,33 @@ import numpy as np
 
 N_PROCESSES = int(os.getenv("SLURM_CPUS_PER_TASK", 1))
 
-WINDOW_WIDTHS, WINDOW_RATIOS = np.linspace(64, 300, 4, dtype=int), [1.0, .75, .5]
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--classifier_path", help="The name of the pickle file where the classifier is.")
 parser.add_argument("--result_path", help="The name of the pickle file to write the new features to.")
 parser.add_argument("--test_dir", help="The name of the directory where the test images are situated.")
+parser.add_argument("--n_processes", type=int, help="Number of processes to use.", default=N_PROCESSES)
 
 args = parser.parse_args()
 
 with open(args.classifier_path, "rb") as pickle_file:
-    classifier = pickle.load(pickle_file)
-
-detector = Detector(classifier, nms_mode="confidence")
-
-def detect_one_image(image_path):
-    image = imread(image_path)
-    rough_detections, decisions = detector.detect(image, 5, WINDOW_WIDTHS, WINDOW_RATIOS, verbose=False, height_range=[100, 500])
-    best_idx = np.array(decisions) > .2
-    best_detections = np.array(rough_detections)[best_idx]
-    best_decisions = np.array(decisions)[best_idx]
-    detections = detector.nms(best_detections, .5, "min", best_decisions)
-    return os.path.basename(image_path), detections, rough_detections, decisions
+    CLASSIFIER = pickle.load(pickle_file)
 
 all_files = [os.path.join(args.test_dir, filename) for filename in os.listdir(args.test_dir)]
 
-pool = Pool(N_PROCESSES)
+def detection_one_image(image_path):
+    """This is piping for the multiprocessing module"""
+    return (os.path.basename(image_path), *detection_pipeline(image_path, CLASSIFIER))
+
+pool = Pool(args.n_processes)
 detections = pool.imap_unordered(
-    detect_one_image,
+    detection_one_image,
     all_files
 )
 pool.close()
 
 result = list(tqdm(detections, total=len(all_files)))
 
+os.makedirs(os.path.dirname(args.result_path), exist_ok=True)
 with open(args.result_path, "wb") as pickle_file:
     pickle.dump(result, pickle_file)
 
